@@ -153,7 +153,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
-          action: 'lead_allocated' | 'email_generated' | 'email_saved' | 'offer_created' | 'offer_updated'
+          action: 'lead_allocated' | 'email_generated' | 'email_saved' | 'offer_created' | 'offer_updated' | 'campaign_started'
           description: string
           metadata: Json | null
           created_at: string
@@ -161,7 +161,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
-          action: 'lead_allocated' | 'email_generated' | 'email_saved' | 'offer_created' | 'offer_updated'
+          action: 'lead_allocated' | 'email_generated' | 'email_saved' | 'offer_created' | 'offer_updated' | 'campaign_started'
           description: string
           metadata?: Json | null
           created_at?: string
@@ -169,7 +169,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
-          action?: 'lead_allocated' | 'email_generated' | 'email_saved' | 'offer_created' | 'offer_updated'
+          action?: 'lead_allocated' | 'email_generated' | 'email_saved' | 'offer_created' | 'offer_updated' | 'campaign_started'
           description?: string
           metadata?: Json | null
           created_at?: string
@@ -215,7 +215,7 @@ export interface Database {
       user_status: 'active' | 'inactive' | 'suspended'
       lead_status: 'allocated' | 'used' | 'invalid'
       email_tone: 'friendly' | 'professional' | 'direct'
-      activity_action: 'lead_allocated' | 'email_generated' | 'email_saved' | 'offer_created' | 'offer_updated'
+      activity_action: 'lead_allocated' | 'email_generated' | 'email_saved' | 'offer_created' | 'offer_updated' | 'campaign_started'
     }
   }
 }
