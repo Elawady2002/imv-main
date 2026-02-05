@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Feedback } from '@/components/ui/feedback'
 
 export default function SendProtocolPage() {
-  const { emails, loading, deleteEmail } = useSavedEmails()
+  const { emails, loading, error, deleteEmail } = useSavedEmails()
   const [activating, setActivating] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
@@ -31,6 +31,14 @@ export default function SendProtocolPage() {
           subject: email.subject
         })
       })
+
+      // Open email client
+      // @ts-ignore - Supabase type for joined data is tricky to infer automatically here
+      const targetEmail = email.leads?.email || ''
+      if (targetEmail) {
+        const mailtoLink = `mailto:${targetEmail}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`
+        window.open(mailtoLink, '_blank')
+      }
 
       if (!response.ok) throw new Error('Activation failed')
 
@@ -75,6 +83,14 @@ export default function SendProtocolPage() {
       />
 
       <PageSection>
+        {error && (
+          <Feedback
+            type="error"
+            message={`Error loading campaigns: ${error}`}
+            className="mb-6"
+          />
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />

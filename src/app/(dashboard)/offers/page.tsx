@@ -18,20 +18,17 @@ import { Feedback } from '@/components/ui/feedback'
 
 export default function OffersPage() {
   const { offers, loading: offersLoading, saveOffer, updateOffer, deleteOffer } = useOffers()
-  const [showForm, setShowForm] = useState(false)
   const [editingOffer, setEditingOffer] = useState<Offer | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [link, setLink] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
-
   const resetForm = () => {
     setName('')
     setDescription('')
     setLink('')
     setEditingOffer(null)
-    setShowForm(false)
     setError('')
   }
 
@@ -40,7 +37,8 @@ export default function OffersPage() {
     setName(offer.name)
     setDescription(offer.description)
     setLink(offer.link || '')
-    setShowForm(true)
+    // Scroll to top to see form
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleSave = async () => {
@@ -87,95 +85,89 @@ export default function OffersPage() {
           tooltipContent="This is your 'Fishing Hook'. Create offers here (Name, Description, Affiliate Link) so the system knows what you are promoting when generating emails."
           learnMoreLink="/support#offers"
         />
-        {!showForm && (
-          <Button onClick={() => setShowForm(true)} glow className="mb-6">
-            <Plus className="w-4 h-4 mr-2" />
-            Create Offer
-          </Button>
-        )}
       </PageSection>
 
       <PageSection>
         <QuickTip tip="Create multiple offer templates for different industries. A generic offer converts less than one tailored to specific business needs." />
       </PageSection>
 
-      {/* Add/Edit Form */}
-      <AnimatePresence>
-        {showForm && (
-          <PageSection>
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-6"
-            >
-              <Card glow>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-lg bg-purple-400/10 border border-purple-400/20">
-                        {editingOffer ? <Edit className="w-6 h-6 text-purple-400" /> : <Plus className="w-6 h-6 text-purple-400" />}
-                      </div>
-                      <div>
-                        <CardTitle>{editingOffer ? 'Edit Offer' : 'New Offer'}</CardTitle>
-                        <CardDescription>
-                          {editingOffer ? 'Modify your offer details' : 'Define your affiliate offer properties'}
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={resetForm}>
-                      <X className="w-4 h-4" />
+      {/* Add/Edit Form - Always Visible */}
+      <PageSection>
+        <motion.div
+          layout
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <Card glow className="border-purple-500/20">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-lg bg-purple-400/10 border border-purple-400/20">
+                    {editingOffer ? <Edit className="w-6 h-6 text-purple-400" /> : <Plus className="w-6 h-6 text-purple-400" />}
+                  </div>
+                  <div>
+                    <CardTitle>{editingOffer ? 'Edit Offer' : 'Create New Offer'}</CardTitle>
+                    <CardDescription>
+                      {editingOffer ? 'Modify your offer details' : 'Define your affiliate offer properties'}
+                    </CardDescription>
+                  </div>
+                </div>
+                {editingOffer && (
+                  <Button variant="ghost" size="sm" onClick={resetForm}>
+                    <X className="w-4 h-4 mr-2" /> Cancel Edit
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {error && (
+                <Feedback
+                  type="error"
+                  message={error}
+                  onDismiss={() => setError('')}
+                  className="mb-6"
+                />
+              )}
+
+              <div className="space-y-4">
+                <Input
+                  label="Template Name"
+                  placeholder="e.g., Web Design Services"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+
+                <Textarea
+                  label="Description"
+                  placeholder="Describe the offer value proposition..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+
+                <Input
+                  label="Link (Optional)"
+                  placeholder="https://example.com/offer"
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                />
+
+
+                <div className="flex gap-4 pt-4">
+                  <Button onClick={handleSave} loading={actionLoading} glow className="min-w-[120px]">
+                    {editingOffer ? 'Update Offer' : 'Save Offer'}
+                  </Button>
+                  {editingOffer && (
+                    <Button variant="outline" onClick={resetForm}>
+                      Cancel
                     </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {error && (
-                    <Feedback
-                      type="error"
-                      message={error}
-                      onDismiss={() => setError('')}
-                      className="mb-6"
-                    />
                   )}
-
-                  <div className="space-y-4">
-                    <Input
-                      label="Template Name"
-                      placeholder="e.g., Web Design Services"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-
-                    <Textarea
-                      label="Description"
-                      placeholder="Describe the offer value proposition..."
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                    />
-
-                    <Input
-                      label="Link (Optional)"
-                      placeholder="https://example.com/offer"
-                      value={link}
-                      onChange={(e) => setLink(e.target.value)}
-                    />
-
-
-                    <div className="flex gap-4 pt-4">
-                      <Button onClick={handleSave} loading={actionLoading} glow>
-                        {editingOffer ? 'Update Offer' : 'Save Offer'}
-                      </Button>
-                      <Button variant="outline" onClick={resetForm}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </PageSection>
-        )}
-      </AnimatePresence>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </PageSection>
 
 
       {/* User's Offers */}

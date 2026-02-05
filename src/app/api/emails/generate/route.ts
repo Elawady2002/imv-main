@@ -1,8 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { DAILY_EMAIL_LIMIT } from '@/lib/constants'
-import { Lead, Offer, UsageLimit } from '@/types/database'
-import OpenAI from 'openai'
+import { UsageLimit } from '@/types/database'
 import { z } from 'zod'
 import { logActivity, checkAndUpdateUsage } from '@/lib/server-utils'
 
@@ -15,11 +14,6 @@ const GenerateSchema = z.object({
   message: 'Either an offer or custom description is required',
   path: ['offerId']
 })
-
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) return null
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-}
 
 export async function POST(request: Request) {
   try {
@@ -91,59 +85,99 @@ export async function POST(request: Request) {
       direct: 'clear, concise, and to the point'
     }
 
-    const prompt = `Generate a business outreach email for the following:
-Business Name: ${lead.business_name}
-Industry: ${lead.industry}
-Location: ${lead.location}
-Offer/Service to Promote: ${offerDescription}
-Tone: ${toneDescriptions[tone] || 'professional'}
+    const prompt = `You are a professional B2B email copywriter.
+    Generate a personalized cold outreach email for the following prospect:
 
-Format response as JSON:
-{
-  "subject": "Subject line",
-  "body": "Email body",
-  "followUp": "Follow-up email"
-}`
+    Prospect Details:
+    - Business Name: ${lead.business_name}
+    - Industry: ${lead.industry}
+    - Location: ${lead.location}
+    
+    Offer to Promote:
+    ${offerDescription}
+    
+    Tone: ${toneDescriptions[tone] || 'professional'}
+    
+    INSTRUCTIONS:
+    - Write a compelling Subject Line.
+    - Write a Body that is persuasive but concise (under 150 words).
+    - Write a short Follow-up email (under 50 words) to send 3 days later.
+    - RETURN ONLY VALID JSON. No markdown formatting, no backticks.
+    
+    Expected JSON Format:
+    {
+      "subject": "Email Subject",
+      "body": "Email Body content...",
+      "followUp": "Follow up email content..."
+    }`
 
-    let generatedEmail = { subject: '', body: '', followUp: '' }
-    const openai = getOpenAIClient()
+    // Use RapidAPI instead of OpenAI SDK
+    const apiKey = process.env.RAPIDAPI_AI_KEY
+    const apiHost = process.env.RAPIDAPI_AI_HOST || 'chatgpt-42.p.rapidapi.com'
 
-    if (!openai) {
-      return NextResponse.json({
-        error: 'AI Engine Offline: Content generation requires system configuration. Please link your OpenAI API key to proceed.',
-        type: 'config_missing'
-      }, { status: 403 })
+    if (!apiKey) {
+      // Fallback to offline generation if no key
+      const fallback = generateFallbackEmail(lead, offerDescription, tone)
+      await checkAndUpdateUsage('emails_generated')
+      await logActivity('email_generated', `Generated (Offline) email for ${lead.business_name}`, { leadId, tone })
+      return NextResponse.json({ success: true, ...fallback })
     }
 
     try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          { role: 'system', content: 'You are a professional email copywriter.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        response_format: { type: 'json_object' }
+      const response = await fetch(`https://${apiHost}/gpt4`, {
+        method: 'POST',
+        headers: {
+          'x-rapidapi-key': apiKey,
+          'x-rapidapi-host': apiHost,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }],
+          web_access: false
+        }),
+        signal: AbortSignal.timeout(45000) // 45s timeout for long generation
       })
-      generatedEmail = JSON.parse(completion.choices[0]?.message?.content || '{}')
+
+      if (!response.ok) {
+        throw new Error(`RapidAPI Error: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      let content = data.result || data.choices?.[0]?.message?.content || ''
+
+      // Clean cleanup markdown if present
+      content = content.replace(/```json\n?|\n?```/g, '').trim()
+
+      let generatedEmail
+      try {
+        generatedEmail = JSON.parse(content)
+      } catch (e) {
+        console.error('JSON Parse Error:', content)
+        // If JSON parsing fails, return a partial result or fallback
+        generatedEmail = generateFallbackEmail(lead, offerDescription, tone)
+      }
 
       if (!generatedEmail.subject || !generatedEmail.body) {
-        throw new Error('Incomplete data from AI')
+        generatedEmail = generateFallbackEmail(lead, offerDescription, tone)
       }
-    } catch (err) {
-      console.error('AI Processing error:', err)
-      return NextResponse.json({ error: 'AI processing failed. Please try again.' }, { status: 502 })
+
+      // Update usage and log activity
+      await checkAndUpdateUsage('emails_generated')
+      await logActivity(
+        'email_generated',
+        `Generated ${tone} email for ${lead.business_name}`,
+        { leadId, tone }
+      )
+
+      return NextResponse.json({ success: true, ...generatedEmail })
+
+    } catch (err: any) {
+      console.error('AI API Error:', err)
+      return NextResponse.json({
+        error: `AI Generation Failed: ${err.message || 'Unknown error'}`,
+        details: err.toString()
+      }, { status: 502 })
     }
-
-    // Update usage and log activity
-    await checkAndUpdateUsage('emails_generated')
-    await logActivity(
-      'email_generated',
-      `Generated ${tone} email for ${lead.business_name}`,
-      { leadId, tone }
-    )
-
-    return NextResponse.json({ success: true, ...generatedEmail })
 
   } catch (error) {
     console.error('Email generation error:', error)

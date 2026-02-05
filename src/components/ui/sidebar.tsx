@@ -27,10 +27,10 @@ import { useRouter } from 'next/navigation'
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/leads', label: 'Lead Allocation', icon: Users },
+  { href: '/offers', label: 'Offer Builder', icon: Gift },
   { href: '/email-builder', label: 'Email Builder', icon: Mail },
   { href: '/send-instructions', label: 'Send Protocol', icon: Send },
   { href: '/activity', label: 'Activity Log', icon: FileText },
-  { href: '/offers', label: 'Offer Builder', icon: Gift },
   { href: '/support', label: 'Support', icon: HelpCircle }
 ]
 

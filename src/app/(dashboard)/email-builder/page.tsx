@@ -87,8 +87,8 @@ function EmailBuilderContent() {
       return
     }
 
-    if (!selectedOffer && !customOffer) {
-      setError('Provide an offer or custom description')
+    if (!selectedOffer) {
+      setError('Please select an offer to promote')
       setErrorType(null)
       return
     }
@@ -109,8 +109,7 @@ function EmailBuilderContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           leadId: selectedLead,
-          offerId: selectedOffer || null,
-          customOffer: customOffer || null,
+          offerId: selectedOffer,
           tone
         })
       })
@@ -123,13 +122,20 @@ function EmailBuilderContent() {
           setErrorType('config_missing')
         }
       } else {
-        setSubject(result.subject)
-        setBody(result.body)
+        console.log('Generation result:', result)
+        setSubject(result.subject || '')
+        setBody(result.body || '')
         setFollowUp(result.followUp || '')
         setSuccess('Outreach content generated successfully!')
         await refreshUsage()
+
+        // Scroll to results
+        setTimeout(() => {
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+        }, 100)
       }
-    } catch {
+    } catch (e) {
+      console.error('Generation error:', e)
       setError('System error during generation')
       setErrorType(null)
     } finally {
@@ -251,24 +257,12 @@ function EmailBuilderContent() {
                     setSelectedOffer(e.target.value)
                     setCustomOffer('')
                   }}
-                  options={[
-                    { value: '', label: 'Use custom description' },
-                    ...offers.map(offer => ({
-                      value: offer.id,
-                      label: offer.name
-                    }))
-                  ]}
+                  options={offers.map(offer => ({
+                    value: offer.id,
+                    label: offer.name
+                  }))}
                   disabled={offersLoading}
                 />
-
-                {!selectedOffer && (
-                  <Textarea
-                    label="Custom Offer"
-                    placeholder="Describe the offer or service..."
-                    value={customOffer}
-                    onChange={(e) => setCustomOffer(e.target.value)}
-                  />
-                )}
 
                 <Select
                   label="Output Tone"
@@ -291,112 +285,119 @@ function EmailBuilderContent() {
                   <Sparkles className="w-4 h-4 mr-2" />
                   Generate Content
                 </Button>
-              </div>
+              </div >
             )}
-          </CardContent>
-        </Card>
-      </PageSection>
+          </CardContent >
+        </Card >
+      </PageSection >
 
       {/* Generated Email */}
-      {(subject || body) && (
-        <PageSection>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-lg bg-green-400/10 border border-green-400/20">
-                  <Mail className="w-6 h-6 text-green-400" />
+      {
+        !!(subject || body) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="mb-6"
+          >
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-lg bg-green-400/10 border border-green-400/20">
+                    <Mail className="w-6 h-6 text-green-400" />
+                  </div>
+                  <div>
+                    <CardTitle>Generated Output</CardTitle>
+                    <CardDescription>Review and modify before saving</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle>Generated Output</CardTitle>
-                  <CardDescription>Review and modify before saving</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-cyan-300/80 uppercase tracking-wider">Subject Line</label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCopy(subject, 'subject')}
-                  >
-                    {copied === 'subject' ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                    <span className="ml-1">{copied === 'subject' ? 'Copied' : 'Copy'}</span>
-                  </Button>
-                </div>
-                <Input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-cyan-300/80 uppercase tracking-wider">Email Body</label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleCopy(body, 'body')}
-                  >
-                    {copied === 'body' ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                    <span className="ml-1">{copied === 'body' ? 'Copied' : 'Copy'}</span>
-                  </Button>
-                </div>
-                <Textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  className="min-h-[200px]"
-                />
-              </div>
-
-              {followUp && (
+              </CardHeader>
+              <CardContent className="space-y-6">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-cyan-300/80 uppercase tracking-wider">Follow-Up</label>
+                    <label className="text-sm font-medium text-cyan-300/80 uppercase tracking-wider">Subject Line</label>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleCopy(followUp, 'followUp')}
+                      onClick={() => handleCopy(subject, 'subject')}
                     >
-                      {copied === 'followUp' ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                      <span className="ml-1">{copied === 'followUp' ? 'Copied' : 'Copy'}</span>
+                      {copied === 'subject' ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                      <span className="ml-1">{copied === 'subject' ? 'Copied' : 'Copy'}</span>
+                    </Button>
+                  </div>
+                  <Input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-cyan-300/80 uppercase tracking-wider">Email Body</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopy(body, 'body')}
+                    >
+                      {copied === 'body' ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                      <span className="ml-1">{copied === 'body' ? 'Copied' : 'Copy'}</span>
                     </Button>
                   </div>
                   <Textarea
-                    value={followUp}
-                    onChange={(e) => setFollowUp(e.target.value)}
-                    className="min-h-[150px]"
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    className="min-h-[200px]"
                   />
                 </div>
-              )}
 
-              <div className="flex gap-4 pt-4 border-t border-zinc-800">
-                <Button
-                  onClick={handleSave}
-                  loading={isSaving}
-                  glow
-                  className="w-full"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save to Database
-                </Button>
-                <Button
-                  onClick={handleGenerate}
-                  variant="outline"
-                  loading={loading}
-                  disabled={stats.emailsRemaining <= 0}
-                  className="w-full"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Regenerate
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </PageSection>
-      )}
-    </PageContainer>
+                {followUp && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-medium text-cyan-300/80 uppercase tracking-wider">Follow-Up</label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopy(followUp, 'followUp')}
+                      >
+                        {copied === 'followUp' ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                        <span className="ml-1">{copied === 'followUp' ? 'Copied' : 'Copy'}</span>
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={followUp}
+                      onChange={(e) => setFollowUp(e.target.value)}
+                      className="min-h-[150px]"
+                    />
+                  </div>
+                )}
+
+                <div className="flex gap-4 pt-4 border-t border-zinc-800">
+                  <Button
+                    onClick={handleSave}
+                    loading={isSaving}
+                    glow
+                    className="w-full"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save to Send Protocol
+                  </Button>
+                  <Button
+                    onClick={handleGenerate}
+                    variant="outline"
+                    loading={loading}
+                    disabled={stats.emailsRemaining <= 0}
+                    className="w-full"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Regenerate
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )
+      }
+    </PageContainer >
   )
 }
 

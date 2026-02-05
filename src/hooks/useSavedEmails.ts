@@ -18,7 +18,7 @@ export function useSavedEmails() {
 
             const { data, error } = await supabase
                 .from('email_templates')
-                .select('*')
+                .select('*, leads(email)')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
 
