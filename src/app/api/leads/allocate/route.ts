@@ -126,20 +126,17 @@ export async function POST(request: Request) {
       }))
     } catch (err: any) {
       console.error('Lead discovery error:', err)
-      if (err.message === 'config_missing_serp') {
-        return NextResponse.json({ error: 'SERPAPI_API_KEY is missing in .env.local' }, { status: 500 })
+      if (err.message === 'config_missing_keys') {
+        return NextResponse.json({
+          error: 'Search Engine Offline: ScraperAPI key is missing in your system configuration.',
+          type: 'config_missing'
+        }, { status: 403 })
       }
       return NextResponse.json({ error: `Failed to discover leads: ${err.message}` }, { status: 502 })
     }
 
     // 3. Filter Duplicates
     const newWebsites = leadsToInsert.map((l: any) => l.website)
-    const debugStats = {
-      scraped: leadsToInsert.length,
-      duplicatesFound: 0,
-      finalInsert: 0,
-      websitesToCheck: newWebsites
-    }
 
     if (newWebsites.length > 0) {
       const { data: existingLeads } = await supabase
@@ -149,59 +146,18 @@ export async function POST(request: Request) {
         .in('website', newWebsites)
 
       const existingSet = new Set(existingLeads?.map(l => l.website) || [])
-      debugStats.duplicatesFound = existingSet.size
       leadsToInsert = leadsToInsert.filter((l: any) => !existingSet.has(l.website))
     }
 
-    debugStats.finalInsert = leadsToInsert.length
-
-    if (leadsToInsert.length === 0) {
-      return NextResponse.json({
-        success: true,
-        leads: [],
-        allocated: 0,
-        message: 'No new unique leads found (duplicates skipped).',
-        debug: debugStats
-      })
-    }
-
-    const { data: insertedLeads, error: insertError } = await supabase
-      .from('leads')
-      .insert(leadsToInsert)
-      .select()
-
-    if (insertError) {
-      console.error('Insert error details:', {
-        message: insertError.message,
-        details: insertError.details,
-        hint: insertError.hint,
-        code: insertError.code
-      })
-      return NextResponse.json({
-        error: `Database synchronization failed: ${insertError.message}`,
-        details: insertError.details,
-        debug: debugStats
-      }, { status: 500 })
-    }
-
-    const actualAllocated = insertedLeads?.length || 0
-    await checkAndUpdateUsage('leads_allocated', actualAllocated)
-
-    await logActivity(
-      'lead_allocated',
-      `Allocated ${actualAllocated} leads for campaign "${campaign}" (Niche: ${niche})`,
-      { niche, campaign, count: actualAllocated }
-    )
-
     return NextResponse.json({
       success: true,
-      leads: insertedLeads,
-      allocated: actualAllocated,
-      remaining: remaining - actualAllocated
+      leads: leadsToInsert,
+      allocated: leadsToInsert.length,
+      message: leadsToInsert.length === 0 ? 'No new unique leads found.' : `Found ${leadsToInsert.length} potential leads.`
     })
 
   } catch (error) {
-    console.error('Lead allocation error:', error)
+    console.error('Lead discovery error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -30,8 +30,8 @@ export const EMAIL_TONES = [
 
 // Lead Status
 export const LEAD_STATUS = {
-  allocated: { label: 'Allocated', color: 'bg-blue-100 text-blue-800' },
-  used: { label: 'Used', color: 'bg-green-100 text-green-800' },
+  allocated: { label: 'Active', color: 'bg-green-100 text-green-800' },
+  used: { label: 'Used', color: 'bg-blue-100 text-blue-800' },
   invalid: { label: 'Invalid', color: 'bg-red-100 text-red-800' }
 } as const
 

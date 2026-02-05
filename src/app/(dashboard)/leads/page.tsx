@@ -28,11 +28,15 @@ const POPULAR_NICHES = [
 
 export default function LeadsPage() {
   const [niche, setNiche] = useState('')
-  const { leads, loading: leadsLoading, error: leadsError, allocateLeads } = useLeads()
+  const { leads: savedLeads, loading: leadsLoading, error: leadsError, refresh: refreshSavedLeads } = useLeads()
   const { stats, refresh: refreshUsage } = useUsageLimit()
   const [localError, setLocalError] = useState('')
   const [errorType, setErrorType] = useState<string | null>(null)
   const [isAllocating, setIsAllocating] = useState(false)
+
+  const [discoveredLeads, setDiscoveredLeads] = useState<any[]>([])
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set())
+  const [isSaving, setIsSaving] = useState(false)
 
   const handleAllocateLeads = async () => {
     if (!niche) {
@@ -50,31 +54,93 @@ export default function LeadsPage() {
     setLocalError('')
     setErrorType(null)
     setIsAllocating(true)
+    setDiscoveredLeads([])
+    setSelectedLeadIds(new Set())
 
-    const result = await allocateLeads(niche)
+    try {
+      const response = await fetch('/api/leads/allocate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ industry: niche })
+      })
 
-    if (result.success) {
-      await refreshUsage()
+      const result = await response.json()
 
-      if (result.allocated === 0) {
-        setLocalError(result.message || 'No new unique leads found (duplicates skipped).')
+      if (response.ok && result.success) {
+        if (result.leads.length === 0) {
+          setLocalError(result.message || 'No new unique leads found (duplicates skipped).')
+        } else {
+          // Generate temporary IDs for selection
+          const leadsWithLegacyIds = result.leads.map((l: any, i: number) => ({ ...l, tempId: `temp-${i}` }))
+          setDiscoveredLeads(leadsWithLegacyIds)
+          setNiche('')
+        }
       } else {
-        setNiche('')
+        setLocalError(result.error || 'Allocation failed')
+        if (result.error?.includes('config_missing')) {
+          setErrorType('config_missing')
+        }
       }
-    } else {
-      setLocalError(result.error || 'Allocation failed')
-      // Assuming result.type might be returned or we can infer it
-      if (result.error?.includes('connection required') || result.error?.includes('config_missing')) {
-        setErrorType('config_missing')
-      } else if (result.error?.includes('No records found')) {
-        setErrorType('no_data')
-      }
+    } catch (err) {
+      setLocalError('System error during discovery')
+    } finally {
+      setIsAllocating(false)
     }
+  }
 
-    setIsAllocating(false)
+  const toggleSelectAll = () => {
+    if (selectedLeadIds.size === discoveredLeads.length) {
+      setSelectedLeadIds(new Set())
+    } else {
+      setSelectedLeadIds(new Set(discoveredLeads.map(l => l.tempId)))
+    }
+  }
+
+  const toggleSelectLead = (tempId: string) => {
+    const newSelected = new Set(selectedLeadIds)
+    if (newSelected.has(tempId)) {
+      newSelected.delete(tempId)
+    } else {
+      newSelected.add(tempId)
+    }
+    setSelectedLeadIds(newSelected)
+  }
+
+  const handleSaveSelectedLeads = async () => {
+    if (selectedLeadIds.size === 0) return
+
+    setIsSaving(true)
+    const leadsToSave = discoveredLeads
+      .filter(l => selectedLeadIds.has(l.tempId))
+      .map(({ tempId, ...rest }) => rest)
+
+    try {
+      const response = await fetch('/api/leads/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leads: leadsToSave })
+      })
+
+      if (response.ok) {
+        await refreshSavedLeads()
+        await refreshUsage()
+        setDiscoveredLeads([])
+        setSelectedLeadIds(new Set())
+        // Redirect to email builder or just show success
+        window.location.href = '/email-builder'
+      } else {
+        const error = await response.json()
+        setLocalError(error.error || 'Failed to save leads')
+      }
+    } catch (err) {
+      setLocalError('Failed to save selected leads')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const error = localError || leadsError
+  const allLeads = discoveredLeads.length > 0 ? discoveredLeads : savedLeads
 
   return (
     <PageContainer>
@@ -85,14 +151,14 @@ export default function LeadsPage() {
 
       {/* Header */}
       <PageHeader
-        title="Lead Allocation"
-        description="Deploy targeting parameters to acquire business leads"
-        tooltipContent="This is where you generate new business leads. Select an industry and location, and the system will allocate verified business contacts for your outreach."
+        title="Lead Discovery"
+        description="Search and discover business leads to grow your Lead Vault"
+        tooltipContent="Discovery mode allows you to find leads before saving them. Use checklists to pick the most relevant ones."
         learnMoreLink="/support#leads"
       />
 
       <PageSection>
-        <QuickTip tip="Target industries where you have experience or knowledge. Your emails will be more authentic and convert better when you understand the business's pain points." />
+        <QuickTip tip="Discovering leads is free. You only use your daily limit when you actually SAVE the leads you want to work with." />
       </PageSection>
 
       {/* Allocation Form */}
@@ -104,9 +170,9 @@ export default function LeadsPage() {
                 <Target className="w-6 h-6 text-cyan-400" />
               </div>
               <div>
-                <CardTitle>Allocation Parameters</CardTitle>
+                <CardTitle>Discovery Parameters</CardTitle>
                 <CardDescription>
-                  Configure your target parameters to acquire new business records
+                  Enter a niche to find potential leads from Instagram
                 </CardDescription>
               </div>
             </div>
@@ -156,7 +222,7 @@ export default function LeadsPage() {
               glow
             >
               <Zap className="w-4 h-4 mr-2" />
-              Execute Allocation
+              Discover Leads
             </Button>
           </CardContent>
         </Card>
@@ -164,163 +230,188 @@ export default function LeadsPage() {
 
       {/* Leads Table or Empty States */}
       <PageSection>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 rounded-lg bg-purple-400/10 border border-purple-400/20">
-            <Users className="w-6 h-6 text-purple-400" />
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-purple-400/10 border border-purple-400/20">
+              <Users className="w-6 h-6 text-purple-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white leading-none mb-2">
+                {discoveredLeads.length > 0 ? 'Discovered Leads' : 'Lead Vault'}
+              </h2>
+              <p className="text-zinc-400 text-sm">
+                <span className="text-purple-400 font-mono">{allLeads.length}</span> records
+                {selectedLeadIds.size > 0 && (
+                  <span className="ml-2 text-cyan-400">({selectedLeadIds.size} selected)</span>
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-white leading-none mb-2">Allocated Leads</h2>
-            <p className="text-zinc-400 text-sm">
-              <span className="text-purple-400 font-mono">{leads.length}</span> records grouped by niche
-            </p>
-          </div>
+
+          {selectedLeadIds.size > 0 && (
+            <Button
+              size="lg"
+              glow
+              onClick={handleSaveSelectedLeads}
+              loading={isSaving}
+              className="bg-green-500 hover:bg-green-600 border-green-400"
+            >
+              Go to Next Step
+              <Zap className="w-4 h-4 ml-2" />
+            </Button>
+          )}
         </div>
 
         {leadsLoading ? (
-          <LoadingState message="Retrieving allocated leads..." />
+          <LoadingState message="Retrieving leads..." />
         ) : errorType === 'config_missing' ? (
           <Card>
             <CardContent className="p-6">
               <EmptyState
                 icon={Zap}
                 title="System Connection Required"
-                description="Real-time data acquisition is currently inactive. You must link your SerpApi key in the system environment to begin lead allocation."
-                action={{
-                  label: "View Configuration Guide",
-                  onClick: () => window.open('/support#configuration', '_blank')
-                }}
+                description="Real-time data acquisition is currently inactive. You must link your ScraperAPI key in the system environment to begin discovery."
               />
             </CardContent>
           </Card>
-        ) : errorType === 'no_data' ? (
-          <Card>
-            <CardContent className="p-6">
-              <EmptyState
-                icon={Target}
-                title="No Records Found"
-                description={`We couldn't find any business results for "${niche}". Try selecting a broader niche.`}
-              />
-            </CardContent>
-          </Card>
-        ) : leads.length === 0 ? (
+        ) : allLeads.length === 0 ? (
           <Card>
             <CardContent className="p-6">
               <EmptyState
                 icon={Users}
-                title="No Leads Allocated"
-                description="Your lead database is currently empty. Configure your target parameters above and execute an allocation to find potential clients."
+                title="No Leads Found"
+                description="Your lead database is currently empty. Start by discovering new leads above."
               />
             </CardContent>
           </Card>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             {Object.entries(
-              leads.reduce((groups: Record<string, typeof leads>, lead) => {
+              allLeads.reduce((groups: Record<string, any[]>, lead) => {
                 const nicheName = lead.industry || 'Other'
                 if (!groups[nicheName]) groups[nicheName] = []
                 groups[nicheName].push(lead)
                 return groups
               }, {})
-            ).map(([nicheName, nicheLeads]) => (
-              <Accordion
-                key={nicheName}
-                defaultOpen={true}
-                title={
-                  <div className="flex items-center gap-4">
-                    <Badge variant="info" className="border-purple-500/30 text-purple-400 bg-purple-500/5">
-                      {nicheName}
-                    </Badge>
-                    <span className="text-sm text-zinc-500">
-                      {nicheLeads.length} leads found
-                    </span>
-                  </div>
+            ).map(([nicheName, nicheLeads]) => {
+              const nicheSelectedCount = nicheLeads.filter(l => selectedLeadIds.has(l.tempId)).length
+              const isAllNicheSelected = nicheLeads.length > 0 && nicheSelectedCount === nicheLeads.length
+
+              const toggleNicheSelectAll = () => {
+                const newSelected = new Set(selectedLeadIds)
+                if (isAllNicheSelected) {
+                  nicheLeads.forEach(l => newSelected.delete(l.tempId))
+                } else {
+                  nicheLeads.forEach(l => newSelected.add(l.tempId))
                 }
-              >
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-zinc-700/50 bg-zinc-900/50">
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider w-[240px]">Business</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider w-[220px]">Email</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider w-[140px]">Location</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider w-[100px]">Status</th>
-                        <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider min-w-[120px]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800/50">
-                      {nicheLeads.map((lead, idx) => (
-                        <motion.tr
-                          key={lead.id}
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.02 }}
-                          className="group hover:bg-zinc-800/30 transition-all duration-200"
-                        >
-                          <td className="px-4 py-3 align-top">
-                            <div className="max-w-[220px]">
-                              <div className="font-medium text-sm text-zinc-100 truncate mb-0.5" title={lead.business_name}>
-                                {lead.business_name}
-                              </div>
-                              {lead.website && (
-                                <a
-                                  href={lead.website}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 text-xs text-cyan-400/80 hover:text-cyan-300 transition-colors truncate max-w-full"
-                                >
-                                  <ExternalLink size={10} className="shrink-0" />
-                                  <span className="truncate">{lead.website.replace(/^https?:\/\/(www\.)?/, '')}</span>
-                                </a>
+                setSelectedLeadIds(newSelected)
+              }
+
+              return (
+                <Accordion
+                  key={nicheName}
+                  defaultOpen={true}
+                  title={
+                    <div className="flex items-center gap-4">
+                      <Badge variant="info" className="border-purple-500/30 text-purple-400 bg-purple-500/5 capitalize">
+                        {nicheName}
+                      </Badge>
+                      <span className="text-sm text-zinc-500">
+                        {nicheLeads.length} records {nicheSelectedCount > 0 && `(${nicheSelectedCount} selected)`}
+                      </span>
+                    </div>
+                  }
+                >
+                  <div className="overflow-x-auto border border-zinc-800/50 rounded-xl bg-zinc-900/30">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-zinc-700/50 bg-zinc-900/50">
+                          <th className="px-4 py-3 text-left w-10">
+                            {discoveredLeads.length > 0 && (
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-cyan-500 focus:ring-cyan-500 cursor-pointer"
+                                checked={isAllNicheSelected}
+                                onChange={toggleNicheSelectAll}
+                              />
+                            )}
+                          </th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider w-[340px]">Name</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider w-[320px]">Email</th>
+                          <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider w-[120px]">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/50">
+                        {nicheLeads.map((lead, idx) => (
+                          <motion.tr
+                            key={lead.id || lead.tempId}
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.02 }}
+                            className={`group hover:bg-zinc-800/30 transition-all duration-200 ${selectedLeadIds.has(lead.tempId) ? 'bg-cyan-500/5' : ''}`}
+                          >
+                            <td className="px-4 py-3 align-middle">
+                              {discoveredLeads.length > 0 && (
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-cyan-500 focus:ring-cyan-500 cursor-pointer"
+                                  checked={selectedLeadIds.has(lead.tempId)}
+                                  onChange={() => toggleSelectLead(lead.tempId)}
+                                />
                               )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 align-top">
-                            <div className="max-w-[200px]">
-                              <a
-                                href={`mailto:${lead.email}`}
-                                className="flex items-center gap-2 group/email text-zinc-300 hover:text-white transition-colors"
-                                title={lead.email}
+                            </td>
+                            <td className="px-4 py-3 align-middle">
+                              <div className="max-w-[320px]">
+                                {lead.website ? (
+                                  <a
+                                    href={lead.website}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-medium text-sm text-zinc-100 hover:text-cyan-400 transition-colors truncate block"
+                                    title={lead.business_name}
+                                  >
+                                    {lead.business_name}
+                                  </a>
+                                ) : (
+                                  <div className="font-medium text-sm text-zinc-100 truncate" title={lead.business_name}>
+                                    {lead.business_name}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 align-middle">
+                              <div className="max-w-[300px]">
+                                <a
+                                  href={`mailto:${lead.email}`}
+                                  className="flex items-center gap-2 group/email text-zinc-300 hover:text-white transition-colors"
+                                  title={lead.email}
+                                >
+                                  <div className="p-1.5 rounded-md bg-zinc-800 group-hover/email:bg-cyan-500/20 group-hover/email:text-cyan-400 transition-colors shrink-0">
+                                    <Mail size={12} />
+                                  </div>
+                                  <span className="font-mono text-xs truncate opacity-80 group-hover/email:opacity-100">{lead.email}</span>
+                                </a>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 align-middle text-right">
+                              <Badge
+                                variant={
+                                  lead.status === 'allocated' || lead.tempId ? 'success' :
+                                    lead.status === 'used' ? 'info' : 'error'
+                                }
+                                className="text-[10px] px-2 py-0.5 h-auto uppercase tracking-wide"
                               >
-                                <div className="p-1.5 rounded-md bg-zinc-800 group-hover/email:bg-cyan-500/20 group-hover/email:text-cyan-400 transition-colors shrink-0">
-                                  <Mail size={12} />
-                                </div>
-                                <span className="font-mono text-xs truncate opacity-80 group-hover/email:opacity-100">{lead.email}</span>
-                              </a>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 align-middle">
-                            <div className="text-zinc-400 text-xs truncate max-w-[120px]" title={lead.location}>
-                              {lead.location}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 align-middle">
-                            <Badge
-                              variant={
-                                lead.status === 'allocated' ? 'info' :
-                                  lead.status === 'used' ? 'success' : 'error'
-                              }
-                              className="text-[10px] px-2 py-0.5 h-auto uppercase tracking-wide"
-                            >
-                              {LEAD_STATUS[lead.status].label}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 align-middle text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 text-xs hover:bg-cyan-950 hover:text-cyan-400"
-                              onClick={() => window.location.href = `/email-builder?lead=${lead.id}`}
-                            >
-                              Create Email
-                            </Button>
-                          </td>
-                        </motion.tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Accordion>
-            ))}
+                                {lead.tempId ? 'Ready' : (LEAD_STATUS[lead.status as keyof typeof LEAD_STATUS]?.label || 'Active')}
+                              </Badge>
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Accordion>
+              )
+            })}
           </div>
         )}
       </PageSection>
