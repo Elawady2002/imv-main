@@ -11,6 +11,13 @@ interface VideoCardProps {
   views?: string
   thumbnailText?: string
   videoUrl?: string
+  level?: 'Beginner' | 'Intermediate' | 'Advanced'
+}
+
+const LEVEL_COLORS = {
+  Beginner: 'bg-green-500 text-black shadow-[0_0_15px_rgba(34,197,94,0.4)]',
+  Intermediate: 'bg-yellow-400 text-black shadow-[0_0_15px_rgba(250,204,21,0.4)]',
+  Advanced: 'bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.4)]'
 }
 
 export function VideoCard({
@@ -19,7 +26,8 @@ export function VideoCard({
   duration = "12:34",
   views = "2,847",
   thumbnailText = "WATCH NOW",
-  videoUrl
+  videoUrl,
+  level
 }: VideoCardProps) {
   const [isPlaying, setIsPlaying] = useState(false)
 
@@ -27,7 +35,7 @@ export function VideoCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card overflow-hidden"
+      className="group relative bg-[#0D0D10] border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-colors"
     >
       {/* Video Thumbnail / Player */}
       <div className="relative aspect-video bg-linear-to-br from-zinc-900 to-zinc-800">
@@ -69,21 +77,19 @@ export function VideoCard({
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <motion.button
                 onClick={() => videoUrl && setIsPlaying(true)}
-                whileHover={{ scale: 1.1 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="relative group"
+                className="relative group/play"
               >
-                {/* Pulse rings */}
-                <div className="absolute inset-0 -m-4">
-                  <div className="absolute inset-0 rounded-full bg-cyan-400/20 animate-ping" />
-                </div>
-                <div className="absolute inset-0 -m-2">
-                  <div className="absolute inset-0 rounded-full bg-cyan-400/30 animate-pulse" />
-                </div>
-
                 {/* Play button */}
-                <div className="relative w-20 h-20 rounded-full bg-linear-to-br from-cyan-400 to-purple-500 flex items-center justify-center shadow-2xl shadow-cyan-400/30 group-hover:shadow-cyan-400/50 transition-shadow">
-                  <Play className="w-8 h-8 text-white ml-1" fill="white" />
+                <div className={`
+                  relative w-14 h-14 rounded-full flex items-center justify-center 
+                  shadow-lg transition-all duration-300
+                  ${level === 'Beginner' ? 'bg-linear-to-br from-green-400 to-green-600 shadow-green-500/20 group-hover/play:shadow-green-500/40' :
+                    level === 'Intermediate' ? 'bg-linear-to-br from-yellow-400 to-yellow-600 shadow-yellow-500/20 group-hover/play:shadow-yellow-500/40' :
+                      'bg-linear-to-br from-purple-400 to-purple-600 shadow-purple-500/20 group-hover/play:shadow-purple-500/40'}
+                `}>
+                  <Play className="w-6 h-6 text-white ml-0.5" fill="white" />
                 </div>
               </motion.button>
 
@@ -91,39 +97,47 @@ export function VideoCard({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="mt-6 text-lg font-bold text-white uppercase tracking-widest"
+                className="mt-4 text-sm font-bold text-white uppercase tracking-[0.2em] drop-shadow-md"
               >
                 {thumbnailText}
               </motion.p>
             </div>
 
             {/* Duration badge */}
-            <div className="absolute bottom-4 right-4 flex items-center gap-1 px-2 py-1 bg-black/60 rounded text-xs text-white">
+            <div className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-md text-[10px] font-medium text-zinc-300 border border-white/10">
               <Clock className="w-3 h-3" />
               {duration}
             </div>
 
-            {/* Live indicator */}
-            <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1 bg-red-500/80 rounded text-xs text-white font-semibold">
-              <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-              FEATURED
-            </div>
+            {/* Level indicator */}
+            {level && (
+              <div className={`
+                absolute top-3 left-3 px-2.5 py-1 rounded-[4px] text-[10px] font-bold uppercase tracking-wider
+                ${LEVEL_COLORS[level]}
+              `}>
+                {level}
+              </div>
+            )}
           </>
         )}
       </div>
 
       {/* Video Info */}
-      <div className="p-5">
-        <h3 className="font-bold text-white text-lg mb-2">{title}</h3>
-        <p className="text-zinc-400 text-sm leading-relaxed mb-4">{description}</p>
+      <div className="p-5 bg-zinc-900/40">
+        <h3 className="font-bold text-white text-base mb-2 line-clamp-1 group-hover:text-white transition-colors">
+          {title}
+        </h3>
+        <p className="text-zinc-500 text-xs leading-relaxed mb-4 line-clamp-2 min-h-[32px]">
+          {description}
+        </p>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 text-xs text-zinc-500">
-            <span className="flex items-center gap-1">
+        <div className="flex items-center justify-between pt-4 border-t border-white/5">
+          <div className="flex items-center gap-4 text-[10px] text-zinc-500 font-medium uppercase tracking-wide">
+            <span className="flex items-center gap-1.5">
               <Eye className="w-3 h-3" />
               {views} views
             </span>
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <Clock className="w-3 h-3" />
               {duration}
             </span>
@@ -132,10 +146,15 @@ export function VideoCard({
           {!isPlaying && (
             <button
               onClick={() => videoUrl && setIsPlaying(true)}
-              className="text-cyan-400 text-sm font-semibold hover:text-cyan-300 transition-colors flex items-center gap-1"
+              className={`
+                text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors
+                ${level === 'Beginner' ? 'text-green-400 hover:text-green-300' :
+                  level === 'Intermediate' ? 'text-yellow-400 hover:text-yellow-300' :
+                    'text-purple-400 hover:text-purple-300'}
+              `}
             >
               Watch Now
-              <Play className="w-3 h-3" fill="currentColor" />
+              <Play className="w-2.5 h-2.5" fill="currentColor" />
             </button>
           )}
         </div>

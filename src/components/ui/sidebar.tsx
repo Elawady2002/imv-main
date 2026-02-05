@@ -18,7 +18,8 @@ import {
   Hexagon,
   Crown,
   Sparkles,
-  Rocket
+  Rocket,
+  School
 } from 'lucide-react'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -30,6 +31,7 @@ const navItems = [
   { href: '/offers', label: 'Offer Builder', icon: Gift },
   { href: '/email-builder', label: 'Email Builder', icon: Mail },
   { href: '/send-instructions', label: 'Send Protocol', icon: Send },
+  { href: '/training', label: 'Training', icon: School },
   { href: '/activity', label: 'Activity Log', icon: FileText },
   { href: '/support', label: 'Support', icon: HelpCircle }
 ]
@@ -121,7 +123,7 @@ export function Sidebar() {
       </nav>
 
       {/* Premium Features */}
-      <div className="px-4 mb-6">
+      <div className="px-4 mb-6 mt-10">
         <div className="flex items-center gap-2 px-4 mb-3">
           <Sparkles className="w-3.5 h-3.5 text-yellow-500/80" />
           <p className="text-[10px] text-yellow-500/80 font-bold uppercase tracking-[0.2em]">

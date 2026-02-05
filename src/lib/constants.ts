@@ -51,6 +51,7 @@ export const NAV_ITEMS = [
   { href: '/leads', label: 'Lead Allocation', icon: 'Users' },
   { href: '/email-builder', label: 'Email Builder', icon: 'Mail' },
   { href: '/send-instructions', label: 'Send Instructions', icon: 'Send' },
+  { href: '/training', label: 'Training', icon: 'School' },
   { href: '/activity', label: 'Activity Log', icon: 'FileText' },
   { href: '/offers', label: 'Offer Builder', icon: 'Gift' },
   { href: '/support', label: 'Support', icon: 'HelpCircle' }
